@@ -40,17 +40,15 @@ $stage = Join-Path $OutputDirectory "stage-$Version"
 if (Test-Path $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 $gameFolder = Join-Path $stage 'XenoModsFPC'
 New-Item -ItemType Directory -Force $gameFolder | Out-Null
-# xvidcore.dll comes from the game folder (the working directory at runtime).
-Get-ChildItem $bin -File | Where-Object { $_.Extension -in '.exe', '.dll' -and $_.Name -ne 'xvidcore.dll' } |
-    Copy-Item -Destination $gameFolder
-# The same license notices as the port's own releases.
+# Rangers.exe, the DLLs it imports and the license notices, chosen like the
+# port's own releases. xvidcore.dll comes from the game folder at runtime.
 if (-not $env:LLVM_MINGW) {
     $toolchain = Get-ChildItem (Join-Path $root '.local\windows-tools') -Directory -Recurse -Filter 'llvm-mingw-*-ucrt-*' |
         Select-Object -First 1
     if ($toolchain) { $env:LLVM_MINGW = $toolchain.FullName }
 }
-& python (Join-Path $PSScriptRoot 'license_files.py') $gameFolder $Target
-if ($LASTEXITCODE -ne 0) { throw 'Collecting license files failed.' }
+& python (Join-Path $PSScriptRoot 'release_files.py') $gameFolder $Target
+if ($LASTEXITCODE -ne 0) { throw 'Collecting the release files failed.' }
 $commit = (& git -C $root rev-parse HEAD).Trim()
 $dirty = if (& git -C $root status --porcelain) { ' (uncommitted changes)' } else { '' }
 Set-Content -Path (Join-Path $gameFolder 'build.txt') -Encoding ASCII -Value @(
