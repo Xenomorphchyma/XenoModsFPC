@@ -125,6 +125,10 @@ if (Test-Path $sdkRoot) { Remove-Item -LiteralPath $sdkRoot -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $sdkStage 'example') | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'sdk\xeno_fpc_plugin_api.h'), (Join-Path $PSScriptRoot 'sdk\README_RU.md'), (Join-Path $PSScriptRoot 'sdk\LICENSE') $sdkStage
 Copy-Item (Join-Path $PSScriptRoot 'sdk\example\XenoFpcExample.cpp') (Join-Path $sdkStage 'example')
+# Names of every hookable routine of this build (written by gen_hooks.py).
+$hookList = Join-Path $root ".local\$cpu\release\xenohooks\XenoHooks.txt"
+if (-not (Test-Path $hookList)) { throw "No hook list: build with hooks first (XENO_HOOKS must not be 0)." }
+Copy-Item $hookList $sdkStage
 $sdkArchive = Join-Path $OutputDirectory "XenoModsFPC-SDK-$Version.zip"
 if (Test-Path $sdkArchive) { Remove-Item -LiteralPath $sdkArchive -Force }
 [IO.Compression.ZipFile]::CreateFromDirectory($sdkRoot, $sdkArchive)

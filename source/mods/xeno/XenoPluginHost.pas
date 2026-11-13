@@ -14,9 +14,14 @@ unit XenoPluginHost;
 interface
 
 {$IFDEF XENO_MODS}
+uses
+  XenoHookRuntime;
+
 {$PACKRECORDS C}
 type
   TXenoFpcEventFn = procedure(User: Pointer; Payload: Pointer); cdecl;
+  // Method hooks: Call is XenoFpcCall of the SDK header.
+  TXenoFpcHookFn = procedure(User: Pointer; Call: PXenoHkCall); cdecl;
 
   TXenoFpcFrameEvent = record
     Size: Cardinal;
@@ -119,6 +124,20 @@ function XenoMusicRemainingMs: Integer;
 procedure XenoMusicPlayCategoryOriginal(const Category: WideString);
 function XenoLoadedPluginCount: Integer;
 
+// Method hooks (see XenoPluginHooks.inc). Phase 0 = before, 1 = after;
+// Flags 1 = also every override in derived classes. 0 = not installed.
+function XenoHookAdd(const Name: AnsiString; Phase, Flags, Priority: Integer; Callback: TXenoFpcHookFn;
+    User: Pointer): PtrInt;
+procedure XenoHookRemove(Handle: PtrInt);
+// PXenoFpcHookInfo of a routine, nil when unknown or ambiguous.
+function XenoHookInfo(const Name: AnsiString): Pointer;
+function XenoHookInfoAt(Index: Integer): Pointer;
+function XenoHookAddInfo(Info: Pointer; Phase, Flags, Priority: Integer; Callback: TXenoFpcHookFn; User: Pointer): PtrInt;
+function XenoHookInvoke(Info: Pointer; Self_: Pointer; Args: PPointer; Result_: Pointer): Boolean;
+// Self-test only: hooks added until the next call belong to a fake plugin
+// with this id ('' = built-in again).
+procedure XenoHookTestOwner(const Id: AnsiString);
+
 // Convenience raisers used by the game code.
 procedure XenoRaiseFrame;
 function XenoRaiseGalaxyCreated(Galaxy: Pointer; SectorCount: Integer): Integer;
@@ -151,7 +170,7 @@ const
       'Galaxy.ContourNoEar', 'Galaxy.StationSpawning', 'Item.Created', 'Item.Destroyed', 'Item.Loaded', 'Item.SaveCost',
       'Kling.Camouflage', 'Hangar.Opened', 'Hangar.Closed', 'Hangar.Refresh', 'Hangar.Key', 'Music.PlayCategory',
       'Music.StopImmediately', 'Music.PlaceFade', 'Sound.VolumeRamp');
-  HostApiVersion = 1;
+  HostApiVersion = 2;
 {$IFDEF MSWINDOWS}
   PluginSuffix = '.XenoPlugin.dll';
 {$ELSE}
@@ -222,6 +241,16 @@ type
     MusicRemainingMs: function: Integer; cdecl;
     SoundSetVolumeStep: procedure(Buffer: Pointer; Step: Single); cdecl;
     MusicCategoryOverride: function(Buffer: PAnsiChar; BufferSize: Integer): Integer; cdecl;
+    // API 2: method hooks.
+    HookCount: function: Integer; cdecl;
+    HookInfoAt: function(Index: Integer): Pointer; cdecl;
+    HookFind: function(Name: PAnsiChar; Found: Pointer; MaxFound: Integer): Integer; cdecl;
+    HookAdd: function(Info: Pointer; Phase, Flags, Priority: Integer; Callback: TXenoFpcHookFn; User: Pointer): PtrInt; cdecl;
+    Hook: function(Name: PAnsiChar; Phase, Flags, Priority: Integer; Callback: TXenoFpcHookFn; User: Pointer): PtrInt; cdecl;
+    HookRemove: procedure(Handle: PtrInt); cdecl;
+    Invoke: function(Info: Pointer; Self_: Pointer; Args: PPointer; Result_: Pointer): Integer; cdecl;
+    ValueGetString: function(Storage: Pointer; TypeName: PAnsiChar; Buffer: PAnsiChar; BufferSize: Integer): Integer; cdecl;
+    ValueSetString: function(Storage: Pointer; TypeName: PAnsiChar; Text: PAnsiChar): Integer; cdecl;
   end;
   PXenoFpcHostV1 = ^TXenoFpcHostV1;
 
@@ -392,6 +421,8 @@ begin
     Name := LowerCase(ClassType.ClassName);
   until False;
 end;
+
+{$I XenoPluginHooks.inc}
 
 { Events }
 
@@ -1057,6 +1088,15 @@ begin
     MusicRemainingMs := @Host_MusicRemainingMs;
     SoundSetVolumeStep := @Host_SoundSetVolumeStep;
     MusicCategoryOverride := @Host_MusicCategoryOverride;
+    HookCount := @Host_HookCount;
+    HookInfoAt := @Host_HookInfoAt;
+    HookFind := @Host_HookFind;
+    HookAdd := @Host_HookAdd;
+    Hook := @Host_Hook;
+    HookRemove := @Host_HookRemove;
+    Invoke := @Host_Invoke;
+    ValueGetString := @Host_ValueGetString;
+    ValueSetString := @Host_ValueSetString;
   end;
 end;
 
@@ -1073,6 +1113,7 @@ begin
       LogCurrentGameException('xeno', WideString(Plugin.PluginId) + ' failed during shutdown', gllWarning);
     end;
   Plugin.Active := False;
+  RemoveHandlers(0, Plugin, True);
   for Event := Low(TXenoEvent) to High(TXenoEvent) do
   begin
     SetLength(Kept, 0);
@@ -1255,6 +1296,7 @@ begin
     TPlugin(Plugins[I]).Free;
   end;
   Plugins.Clear;
+  ShutdownHooks;
 end;
 
 function XenoLoadedPluginCount: Integer;

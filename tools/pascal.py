@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 if os.name != "nt":
@@ -112,6 +113,38 @@ end.
     return path
 
 
+def instrument_game_sources(work: Path, command: list[str | Path]) -> list[str | Path]:
+    """Compile the XenoModsFPC hook mirror of source/ instead of source/ itself.
+
+    xenomods/gen_hooks.py wraps the game's routines so that plugins can hook
+    them by name; line numbers stay the same. XENO_HOOKS=0 builds the plain
+    sources.
+    """
+    if os.environ.get("XENO_HOOKS", "1") == "0":
+        return command
+    import importlib.util
+
+    script = ROOT / "xenomods/gen_hooks.py"
+    spec = importlib.util.spec_from_file_location("gen_hooks", script)
+    gen_hooks = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = gen_hooks  # dataclasses look the module up
+    spec.loader.exec_module(gen_hooks)
+    mirror = work / "xenohooks/source"
+    gen_hooks.build_mirror(mirror, work / "xenohooks/XenoHooks.txt")
+    source = os.path.normcase(str(ROOT / "source"))
+
+    def remap(arg: str | Path) -> str | Path:
+        text = str(arg)
+        prefix = text[:3] if text.startswith(("-Fu", "-Fi")) else ""
+        path = text[len(prefix):]
+        normalized = os.path.normcase(os.path.normpath(path)) if path else ""
+        if normalized == source or normalized.startswith(source + os.sep):
+            return prefix + str(mirror / os.path.relpath(path, ROOT / "source"))
+        return arg
+
+    return [remap(arg) for arg in command]
+
+
 def pascal_state(command: list[str | Path], dependencies: tuple[Path, ...]) -> str:
     roots = {Path(str(arg)[3:]) for arg in command if str(arg).startswith(("-Fu", "-Fi"))}
     sources = [Path(arg) for arg in command if str(arg).endswith((".pas", ".pp", ".dpr", ".lpr"))]
@@ -168,6 +201,7 @@ def compile_pascal(
     dependencies: tuple[Path, ...] = (),
 ) -> bool:
     if any(Path(str(arg)).name == "Rangers.dpr" for arg in command):
+        command = instrument_game_sources(work, command)
         build_info = generate_build_info(work, command)
         command = [command[0], f"-Fu{build_info.parent}", *command[1:]]
     # FPC tracks unit/source dependencies, but not every change to compiler options.

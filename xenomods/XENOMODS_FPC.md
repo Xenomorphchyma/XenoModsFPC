@@ -8,18 +8,34 @@
 ## Архитектура
 
 XenoNativeLoader находит машинный код Delphi-сборки `Rangers.exe` по
-сигнатурам и патчит его в памяти. FPC-порт — другая программа (другие
+сигнатурам и патчит его в памяти. FPC-порт - другая программа (другие
 раскладка объектов и VMT, LLVM, 64-битные и не-Windows цели), поэтому DLL
 для лоадера здесь работать не могут. Вместо этого:
 
-- **Хост плагинов** `source/mods/xeno/XenoPluginHost.pas` — замена
+- **Хост плагинов** `source/mods/xeno/XenoPluginHost.pas` - замена
   XenoNativeLoader для FPC. Он загружает `Mods\...\Native\*.XenoPlugin.dll`
   (`.so`) включённых модов и отдаёт им C-API
-  (`xenomods/sdk/xeno_fpc_plugin_api.h`): события в точках кода игры, поля
-  объектов по имени, скриптовые функции для `ImportedFunction`, INI, лог,
-  UI и музыку. EXE не нужно менять под каждый мод. Для авторов модов —
-  `xenomods/sdk/README_RU.md`.
-- **Точки расширения** в коде игры — вызовы `XenoRaise*` под
+  (`xenomods/sdk/xeno_fpc_plugin_api.h`): хуки любых методов по имени,
+  вызов функций игры, события в точках кода игры, поля объектов по имени,
+  скриптовые функции для `ImportedFunction`, INI, лог, UI и музыку. EXE не
+  нужно менять под каждый мод. Для авторов модов - `xenomods/sdk/README_RU.md`.
+- **Хуки методов.** `tools/pascal.py` перед компиляцией вызывает
+  `xenomods/gen_hooks.py`: он копирует `source/` в
+  `.local/<цель>/release/xenohooks/source` и компилирует копию. В ней каждая
+  подпрограмма с телом разделена на тело `<Имя>__XB<n>` (на месте оригинала,
+  номера строк не меняются) и обёртку с исходным именем. Обёртка вызывает
+  тело напрямую, пока слот хука пуст, а иначе идёт через `<Имя>__XH<n>` и
+  `XenoHookRuntime` к обработчикам (`XenoPluginHooks.inc`). Каждый модуль
+  регистрирует описатели своих подпрограмм (имя, параметры, типы, вызывалка
+  для `invoke`). Список имён - `xenohooks/XenoHooks.txt`, он попадает в
+  архив SDK. `XENO_HOOKS=0` собирает без обёрток.
+  `xenomods/hooks_exclude.txt` - самые частые мелкие функции, которые не
+  оборачиваются: с ними ход и генерация были на 15-20% дольше. Обновить
+  список: собрать с `XENO_HOOKS_PROFILE=1`, запустить
+  `Rangers.exe --xeno-selftest --xeno-hook-profile` и взять из
+  `xeno_hook_profile.txt` в папке пользователя всё, что вызывалось 10 млн раз
+  и больше.
+- **Точки расширения** в коде игры - вызовы `XenoRaise*` под
   `{$IFDEF XENO_MODS}` в aItem, aKling, aGalaxy, fHangar, GR_Music, GR_Sound,
   fLoad, fPanelRuins и GR_Main.
 - **Карта полей** генерируется из исходников:
@@ -40,18 +56,18 @@ XenoNativeLoader находит машинный код Delphi-сборки `Ran
 
 | Мод | Тип | FPC | Где |
 | --- | --- | --- | --- |
-| XenoBG, XenoCoalitionBG, XenoStationsBG, XenoPlanets | ресурсы (.pkg) | без изменений | — |
-| XenoRangers, XenoRangersOriginalBalance | ресурсы, скрипты | без изменений | — |
-| XenoZeroSignalQuest | текстовый квест | без изменений | — |
+| XenoBG, XenoCoalitionBG, XenoStationsBG, XenoPlanets | ресурсы (.pkg) | без изменений | - |
+| XenoRangers, XenoRangersOriginalBalance | ресурсы, скрипты | без изменений | - |
+| XenoZeroSignalQuest | текстовый квест | без изменений | - |
 | XenoCoalitionSupplyLines | скрипт + DLL настроек | встроен | `XenoCoalitionSupplyLines.pas` |
 | XenoDomRangers | скрипт + DLL (камуфляж NPC) | встроен | `XenoDomRangers.pas`, событие `Kling.Camouflage` |
 | XenoEquipmentInflation | скрипт + DLL (цены TItem) | встроен | `XenoEquipmentInflation.pas`, события `Item.*` |
 | XenoHangarPaging | DLL + UI в CFG | встроен | `XenoHangarPaging.pas`, события `Hangar.*` |
 | XenoMusicFlow | DLL (смена музыки) | встроен | `XenoMusicFlow.pas`, события `Music.*`, `Sound.VolumeRamp`, `Frame` |
 | XenoBigGalaxy: GalaxyGenerator | DLL (55 секторов) | встроен | `XenoBigGalaxy.pas`, события `Galaxy.*` |
-| XenoBigGalaxy: NextDay | DLL | режим Compatible — штатное поведение, кода не нужно; Dominator* не перенесены | — |
-| XenoScriptHotReload | инструмент автора | не перенесён | — |
-| XenoSystemZoom | DLL (масштаб карты системы) | не в релизе | — |
+| XenoBigGalaxy: NextDay | DLL | режим Compatible - штатное поведение, кода не нужно; Dominator* не перенесены | - |
+| XenoScriptHotReload | инструмент автора | не перенесён | - |
+| XenoSystemZoom | DLL (масштаб карты системы) | не в релизе | - |
 | XenoPBEngineFix | DLL (имя кэша PBEngine) | не нужен | движок роботов в порте не подключается |
 | XenoStable (лоадер) | исправления D3D9/окна/фокуса | не нужен | порт работает на SDL2/OKGF |
 | XenoStable: AchievementsWithMods | | не нужен | достижения в порте локальные и от модов не зависят |
@@ -62,16 +78,16 @@ XenoNativeLoader находит машинный код Delphi-сборки `Ran
   только у TPlayer) прямо в объект рейнджера по смещению. Здесь логика серии
   хранится в таблице сессий; поля камуфляжа TShip пишутся как раньше и
   попадают в сейв. Мост SolHook не нужен.
-- **XenoEquipmentInflation.** Таблица предметов — хэш по адресу. Вместо
-  NewInstance/FreeInstance — `TItem.Create`/`Destroy`, затем конец
+- **XenoEquipmentInflation.** Таблица предметов - хэш по адресу. Вместо
+  NewInstance/FreeInstance - `TItem.Create`/`Destroy`, затем конец
   `LoadFromBuffer`/`LoadFromBlock` и запись Cost в `SaveToBuffer`.
 - **XenoHangarPaging.** Страница заполняется до штатной случайной раскладки,
   которая тогда пропускается (её случайные вызовы сохраняются, чтобы не
-  сдвигать RNG). Стрелки — колбэки кнопок из CFG мода, а не перехват WndProc.
+  сдвигать RNG). Стрелки - колбэки кнопок из CFG мода, а не перехват WndProc.
 - **XenoMusicFlow.** Таймер Win32 заменён событием `Frame`; остаток трека
   оценивается тем же методом по позиции чтения файла.
 - **XenoBigGalaxy.** `Constellations.Generator.*` читаются из Lang.dat мода,
-  `[RuntimeBases]` — из `Native\XenoGalaxyGenerator.XenoPlugin.ini`. Мост
+  `[RuntimeBases]` - из `Native\XenoGalaxyGenerator.XenoPlugin.ini`. Мост
   SolEngine и тестовая геометрия HexGrid не перенесены.
 - Настройки читаются из тех же `Native\*.XenoPlugin.ini`
   (`[Plugin] Enabled=0` отключает мод). Сообщения пишутся в
@@ -84,6 +100,8 @@ XenoNativeLoader находит машинный код Delphi-сборки `Ran
 
 - чистую логику модов (случаи из прежних `native_tests.cpp`);
 - хост: карту полей, внешний плагин, скриптовый мост;
+- хуки методов: поиск по имени, `invoke`, изменение аргументов и
+  результата, замену, порядок нескольких модов, переопределения, строки;
 - генерацию новой игры с выбранными модами и ходы;
 - скриптовые библиотеки модов;
 - камуфляж DomRangers на настоящем доминаторе;
@@ -93,12 +111,17 @@ XenoNativeLoader находит машинный код Delphi-сборки `Ran
 
 Тест идёт в фоне: окно скрыто и не забирает фокус, звук уходит в пустое
 устройство SDL (музыка при этом играет внутри игры, её проверки работают),
-окна ошибок не показываются — ошибка пишется в `rangers-fpc.log`, код выхода
+окна ошибок не показываются - ошибка пишется в `rangers-fpc.log`, код выхода
 ненулевой. `--xeno-visible` показывает окно, диалоги и включает звук.
 
-Отчёт — `<папка пользователя>\xeno_selftest.txt`, код выхода 0 или 1.
-Проверка внешнего плагина пропускается, если пример
-`XenoTests\XenoFpcExample` не установлен.
+Отчёт - `<папка пользователя>\xeno_selftest.txt`, код выхода 0 или 1.
+Проверка внешнего плагина (скриптовая функция и его хук на
+`TGalaxy.NextDay`) пропускается, если пример `XenoTests\XenoFpcExample` не
+установлен.
+
+`--xeno-seed=N` задаёт seed новой галактики, чтобы сравнивать скорость двух
+сборок на одной и той же игре. Время генерации всё равно заметно плавает:
+раскладка XenoBigGalaxy ограничена по времени, а не только по попыткам.
 
 ## Установка и упаковка
 
@@ -109,8 +132,8 @@ XenoNativeLoader находит машинный код Delphi-сборки `Ran
   папку игры; оригинальный Rangers.exe и его okgf.dll не трогаются. EXE в
   подпапке сам находит данные игры уровнем выше (`XenoSelectGameDirectory`),
   `--user-dir=` задаёт отдельную папку сохранений и настроек.
-- `XenoModsFPC-SDK-X.zip` для авторов модов: заголовок API, инструкция и
-  пример плагина.
+- `XenoModsFPC-SDK-X.zip` для авторов модов: заголовок API, инструкция,
+  пример плагина и `XenoHooks.txt` - список методов для хуков.
 
 Android: код переносим (без Win32-API); APK из этой ветки собирается штатным
 `tools/build.py --target=android` на Linux или macOS (WSL).

@@ -1,0 +1,72 @@
+# Routines that gen_hooks.py leaves unwrapped.
+#
+# Each of them was called at least 10 million times during the self-test
+# (new 55-sector game and 5 turns, Rangers.exe --xeno-selftest
+# --xeno-hook-profile in a XENO_HOOKS_PROFILE=1 build). Wrapping them cost
+# 15-20% of the turn and generation time, and a hook on any of them would
+# make the game crawl anyway; hook the routines that call them instead.
+#
+# One name per line (Class.Method or Unit.Routine, as in XenoHooks.txt);
+# the number is the call count of that run.
+
+TGalaxy.IsEquipmentKnowledgeUnrestricted      # 650404249
+TShip.CanUseEquipmentTech                     # 649966380
+TShip.IsEquipmentUsable                       # 620656923
+TShip.GetEquipmentStatBonus                   # 588915894
+TEquipment.GetStatBonus                       # 588915894
+TPolygon2D.ContainsPoint                      # 469309570
+aPlayer.GetPlayer                             # 349427412
+TShip.GetHull                                 # 306004976
+TShip.IsHealthEffectActive                    # 253386573
+TShip.InNormalSpace                           # 205811918
+TShip.IsHullDestroyed                         # 203974031
+TWeapon.GetWeaponInfo                         # 116477239
+TShip.GetOwnStatBonus                         # 112652371
+aMyFunction.PointDistanceSquared              # 106706090
+TShip.FindCombatStatusEffect                  # 75644570
+TShip.GetCombatStatusStrength                 # 75631992
+TShip.GetTotalStatBonus                       # 71835383
+aVector.PointsNearlyEqualF                    # 66253092
+TShip.CountActiveArtefacts                    # 63252395
+TGalaxy.IsChaoticRandomEnabled                # 54489842
+TShip.GetEngine                               # 40599918
+TShip.ProcessMovementStep                     # 40018571
+TVarArrayEC.GetNameOrderIndex                 # 39118691
+EC_Expression.CompareScriptNames              # 38527639
+TVarArrayEC.GetItemByNameOrder                # 38525761
+aMyFunction.SeededRandomIntRange              # 38434442
+aItem.GetBaseHullSlotCount                    # 37609755
+THull.GetSlotCount                            # 37433691
+TShip.GetSlotCount                            # 37210667
+aMyFunction.RemapClamped                      # 36385528
+aMyFunction.PolarToPoint                      # 36348320
+TPlanet.GetPosition                           # 35835133
+TSPath.PopFreeNode                            # 30869853
+TSPath.AppendNode                             # 30869853
+TSPath.RemoveNode                             # 30657685
+TAsteroid.IntegrateMotion                     # 29950594
+TAsteroid.AdvanceOrbitStep                    # 29380500
+aConst.ClassifyWeaponDamageFlags              # 29350051
+TWeapon.GetDamageFlags                        # 24934511
+TKling.ShouldKamikaze                         # 24791233
+aConst.ItemTypeToSlotKind                     # 20943197
+TShip.GetSlotCountForItemType                 # 20943132
+aVector.SegmentsNearlyEqualF                  # 20603733
+TShip.GetWeaponRange                          # 19036603
+TShip.RelationToShip                          # 17846965
+TShip.CanBoostArtefact                        # 17068783
+TShip.IsMicroModuleRaciallyRestricted         # 16664807
+TShip.GetWeaponMaxDamage                      # 16174905
+TPlanet.AdvanceOrbitStep                      # 14419500
+THull.GetFragilityFactor                      # 13537914
+TKling.IsProgramActive                        # 13194302
+TShip.GetFuelTanks                            # 12737296
+aMyFunction.NextRandomIntRange                # 12068377
+TShip.GetEffectiveSkillLevel                  # 11810257
+aMyFunction.HeadingDegreesToRadians           # 11691029
+TShip.CalculateItemEffectiveness              # 10625741
+TShip.GetEquipmentEvaluationSynergyBonus      # 10625705
+TShip.GetDefGenerator                         # 10535437
+TShip.GetCargoHook                            # 10379854
+TExpressionEC.GetVariable                     # 10337964
+TShip.ScriptItemsAct                          # 10078144

@@ -1,9 +1,10 @@
 /*
- * XenoModsFPC plugin API, version 1.
+ * XenoModsFPC plugin API, version 2.
  *
  * The Free Pascal build of Space Rangers HD loads Mods\<category>\<mod>\Native\
  * *.XenoPlugin.dll (.so on Linux/Android) for every selected mod, the same way
- * XenoNativeLoader does for the Delphi game. Plugins do not patch code: the game
+ * XenoNativeLoader does for the Delphi game. Plugins do not patch code: any
+ * routine of the game can be hooked by name (hook(), API 2), the game also
  * raises named events at fixed extension points, and object fields are found
  * by name through fieldInfo(). One DLL may export both the XenoNativeLoader
  * entry points (XenoPlugin_*) and these (XenoFpcPlugin_*).
@@ -12,7 +13,8 @@
  *  - every function is cdecl; every string is UTF-8; paths use the host OS;
  *  - structures only grow: check size before using a member added later;
  *  - the host calls the plugin on the game thread unless an event says
- *    otherwise (Item.*, Sound.VolumeRamp may run on worker threads);
+ *    otherwise (Item.*, Sound.VolumeRamp may run on worker threads); a hook
+ *    runs on whatever thread called the routine;
  *  - object pointers are only valid during the call that delivered them,
  *    unless isLiveObject() still confirms them later.
  */
@@ -35,6 +37,7 @@ extern "C" {
 #endif
 
 #define XENO_FPC_HOST_API_V1 1u
+#define XENO_FPC_HOST_API_V2 2u /* method hooks, invoke, string values */
 
 enum XenoFpcLogLevel { XENO_FPC_LOG_DEBUG = 0, XENO_FPC_LOG_INFO = 1, XENO_FPC_LOG_WARNING = 2, XENO_FPC_LOG_ERROR = 3 };
 
@@ -62,6 +65,74 @@ typedef struct XenoFpcFieldInfo {
     int32_t byteSize;
     const char* typeName;  /* declared Pascal type, e.g. "Integer", "WideString", "TList" */
 } XenoFpcFieldInfo;
+
+/* ---- Method hooks (API 2) -------------------------------------------------
+
+   Every routine of the game with a body (methods, constructors, destructors,
+   unit routines) can be hooked by name: "TShip.GetName", "aShip.TShip.GetName"
+   or "EC_Str.TrimWideString". Overloads take the parameter types:
+   "TFoo.Bar(Integer, WideString)". The list of names is XenoHooks.txt in the
+   SDK archive; hookCount()/hookInfoAt() enumerate them at run time. */
+
+enum XenoFpcHookPhase { XENO_FPC_HOOK_BEFORE = 0, XENO_FPC_HOOK_AFTER = 1 };
+/* hook()/hookAdd() flags. OVERRIDES: also every override of the method in
+   derived classes (the base method may be abstract); a call that goes through
+   several overrides of one object (inherited) reaches the handler once. */
+enum XenoFpcHookFlags { XENO_FPC_HOOK_OVERRIDES = 1 };
+enum XenoFpcRoutineKind { XENO_FPC_PROCEDURE = 0, XENO_FPC_FUNCTION = 1, XENO_FPC_CONSTRUCTOR = 2, XENO_FPC_DESTRUCTOR = 3 };
+enum XenoFpcRoutineFlags {
+    XENO_FPC_ROUTINE_CLASS_METHOD = 1,  /* self is the class, not an object */
+    XENO_FPC_ROUTINE_STATIC = 2,        /* no self */
+    XENO_FPC_ROUTINE_OBJECT = 4,        /* old-style object: self points to it */
+    XENO_FPC_ROUTINE_INVOKABLE = 8,     /* invoke() can call it */
+    XENO_FPC_ROUTINE_VIRTUAL = 16
+};
+enum XenoFpcArgumentMode { XENO_FPC_ARG_VALUE = 0, XENO_FPC_ARG_CONST = 1, XENO_FPC_ARG_VAR = 2, XENO_FPC_ARG_OUT = 3, XENO_FPC_ARG_CONSTREF = 4 };
+
+typedef struct XenoFpcHookArgument {
+    const char* name;
+    const char* typeName;  /* Pascal type as declared, e.g. "Integer", "WideString", "TShip" */
+    int32_t mode;          /* XenoFpcArgumentMode */
+    int32_t byteSize;      /* 0 for open arrays and untyped parameters */
+} XenoFpcHookArgument;
+
+typedef struct XenoFpcHookInfo {
+    uint32_t size;
+    int32_t id;                  /* 0 .. hookCount()-1 in this build */
+    const char* name;            /* "TShip.GetName", "EC_Str.TrimWideString" */
+    const char* unitName;
+    const char* className;       /* "" for unit routines */
+    const char* methodName;
+    const char* parameters;      /* "(const Text: WideString)" as declared, "" without parameters */
+    const char* resultType;      /* "" for procedures; the class for constructors */
+    int32_t kind;                /* XenoFpcRoutineKind */
+    int32_t flags;               /* XenoFpcRoutineFlags */
+    int32_t resultSize;
+    int32_t argumentCount;
+    const XenoFpcHookArgument* arguments;
+} XenoFpcHookInfo;
+
+/* One call of a hooked routine, shared by all its handlers.
+   arguments[i] points to argument i (for var/out arguments: to the caller's
+   variable). result points to the function result (NULL for procedures).
+
+   Before handlers may change value, var and out arguments (never const ones)
+   and may replace the routine: write *result and set skipOriginal = 1. Only
+   the first replacement counts; later handlers see replacedBy and should
+   leave the result alone. After handlers see the final result and may change
+   it. Strings and other managed values are changed with valueSetString(). */
+typedef struct XenoFpcCall {
+    uint32_t size;
+    const XenoFpcHookInfo* info;
+    void* self;                  /* object, class (class methods) or NULL */
+    void* const* arguments;
+    void* result;
+    int32_t skipOriginal;        /* before: 1 = do not run the original */
+    int32_t originalRan;         /* after: 1 when the original ran */
+    const char* replacedBy;      /* id of the plugin that replaced the original, or NULL */
+} XenoFpcCall;
+
+typedef void (XENO_FPC_CALL* XenoFpcHookFn)(void* user, XenoFpcCall* call);
 
 typedef void (XENO_FPC_CALL* XenoFpcEventFn)(void* user, void* payload);
 typedef void (XENO_FPC_CALL* XenoFpcScriptFn)(void* user, XenoFpcScriptCall* call);
@@ -136,6 +207,31 @@ typedef struct XenoFpcHostV1 {
     int32_t (XENO_FPC_CALL* musicRemainingMs)(void);
     void (XENO_FPC_CALL* soundSetVolumeStep)(void* buffer, float step);
     int32_t (XENO_FPC_CALL* musicCategoryOverride)(char* buffer, int32_t bufferSize);
+
+    /* ---- API 2: method hooks (check apiVersion >= 2) ---- */
+    int32_t (XENO_FPC_CALL* hookCount)(void);
+    const XenoFpcHookInfo* (XENO_FPC_CALL* hookInfoAt)(int32_t index);
+    /* Fills up to maxFound matches; returns how many routines match the name. */
+    int32_t (XENO_FPC_CALL* hookFind)(const char* name, const XenoFpcHookInfo** found, int32_t maxFound);
+    /* Handlers run by priority (lower first), then in mod load order; after
+       handlers in the reverse order. Returns a handle, 0 on failure. Hooks are
+       removed automatically when the plugin is unloaded. */
+    intptr_t (XENO_FPC_CALL* hookAdd)(const XenoFpcHookInfo* info, int32_t phase, int32_t flags, int32_t priority,
+        XenoFpcHookFn callback, void* user);
+    /* hookAdd by name; logs unknown and ambiguous names. */
+    intptr_t (XENO_FPC_CALL* hook)(const char* name, int32_t phase, int32_t flags, int32_t priority,
+        XenoFpcHookFn callback, void* user);
+    void (XENO_FPC_CALL* hookRemove)(intptr_t handle);
+    /* Calls a routine (with its hooks): arguments as in XenoFpcCall, result
+       storage of info->resultSize bytes, zeroed for managed types. Returns 0
+       when the routine cannot be invoked or raised an exception. */
+    int32_t (XENO_FPC_CALL* invoke)(const XenoFpcHookInfo* info, void* self, void* const* arguments, void* result);
+    /* Strings in game storage (arguments, results, fields) by Pascal type name:
+       WideString, UnicodeString, AnsiString/string, UTF8String, ShortString;
+       get also PWideChar/PAnsiChar. get returns the length or -1; set 1 or 0,
+       set with NULL makes the string empty (and frees it). */
+    int32_t (XENO_FPC_CALL* valueGetString)(const void* storage, const char* typeName, char* buffer, int32_t bufferSize);
+    int32_t (XENO_FPC_CALL* valueSetString)(void* storage, const char* typeName, const char* text);
 } XenoFpcHostV1;
 
 typedef struct XenoFpcPluginInfoV1 {

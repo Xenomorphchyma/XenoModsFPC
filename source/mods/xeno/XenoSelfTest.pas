@@ -42,6 +42,7 @@ uses
   GI_GraphButton,
   GR_Music,
   XenoModsHost,
+  XenoHookRuntime,
   XenoPluginHost,
   XenoBigGalaxy,
   XenoEquipmentInflation,
@@ -50,6 +51,8 @@ uses
 
 var
   Requested: Boolean = False;
+  ProfileHooks: Boolean = False;
+  FixedSeed: Integer = 0;
   Started: Boolean = False;
   TurnCount: Integer = 5;
   Report: TStringList;
@@ -223,6 +226,222 @@ begin
   end
   else
     Skip('host: external plugin', 'select a mod with XenoFpcExample.XenoPlugin.dll to test it');
+end;
+
+{ Method hooks }
+
+var
+  HookTrace: AnsiString;
+  HookCalls: Integer;
+
+procedure HookAddHundred(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  Inc(PInteger(Call^.Result_)^, 100);
+end;
+
+procedure HookReplace(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  PInteger(Call^.Result_)^ := PtrInt(User);
+  Call^.SkipOriginal := 1;
+end;
+
+procedure HookSawOriginal(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  HookTrace := HookTrace + 'ran=' + IntToStr(Call^.OriginalRan) + ' by=' + AnsiString(Call^.ReplacedBy);
+end;
+
+// User is a one-letter tag: before handlers append "<tag>>", after handlers "<tag><".
+procedure HookTraceBefore(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  HookTrace := HookTrace + AnsiChar(PtrInt(User)) + '>';
+end;
+
+procedure HookTraceAfter(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  HookTrace := HookTrace + AnsiChar(PtrInt(User)) + '<';
+end;
+
+procedure HookReadDelimiters(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  if PWideString(Call^.Arguments^[1])^ = ',' then
+    HookTrace := HookTrace + 'delims ok';
+end;
+
+procedure HookShiftTurn(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  Inc(PInteger(Call^.Arguments^[0])^, 10);
+end;
+
+procedure HookCountCall(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  Inc(HookCalls);
+end;
+
+procedure HookRename(User: Pointer; Call: PXenoHkCall); cdecl;
+begin
+  PWideString(Call^.Result_)^ := 'Hooked ' + PWideString(Call^.Result_)^;
+end;
+
+procedure TestHooks;
+const
+  CountName = 'EC_Str.CountDelimitedPartsW';
+var
+  H1, H2, H3, H4: PtrInt;
+  Info: Pointer;
+  Text, Delims, Trimmed, Name: WideString;
+  Args: array[0..1] of Pointer;
+  Value, I, Loops, Turn: Integer;
+  StartedAt: QWord;
+  Shifted, Plain: Double;
+begin
+  Check(XenoHookCount > 8000, 'hooks: game routines registered', IntToStr(XenoHookCount));
+  Check(XenoHookInfo(CountName) <> nil, 'hooks: find a unit routine by name');
+  Check(XenoHookInfo('TGalaxy.TurnToDateTime') <> nil, 'hooks: find a method by name');
+  Check(XenoHookInfo('aGalaxy.TGalaxy.TurnToDateTime') <> nil, 'hooks: unit-qualified method name');
+  Check(XenoHookInfo('TGalaxy.NoSuchMethod') = nil, 'hooks: unknown name');
+
+  // Invoke by name, through the wrapper.
+  Info := XenoHookInfo(CountName);
+  Text := 'a,b,c';
+  Delims := ',';
+  Args[0] := @Text;
+  Args[1] := @Delims;
+  Value := 0;
+  Check(XenoHookInvoke(Info, nil, @Args[0], @Value) and (Value = 3), 'hooks: invoke a routine by name', IntToStr(Value));
+  Trimmed := '';
+  Text := '  x  ';
+  Check(XenoHookInvoke(XenoHookInfo('EC_Str.TrimWideString'), nil, @Args[0], @Trimmed) and (Trimmed = 'x'),
+      'hooks: invoke with a string result', Trimmed);
+
+  // An after hook changes the result of direct calls from game code too.
+  H1 := XenoHookAdd(CountName, 1, 0, 0, @HookAddHundred, nil);
+  Check(H1 <> 0, 'hooks: install an after hook');
+  Value := CountDelimitedPartsW('a,b,c', ',');
+  Check(Value = 103, 'hooks: after hook changes the result of a direct call', IntToStr(Value));
+  XenoHookRemove(H1);
+  Check(CountDelimitedPartsW('a,b,c', ',') = 3, 'hooks: removed hook no longer runs');
+
+  // Arguments are visible to before handlers.
+  HookTrace := '';
+  H1 := XenoHookAdd(CountName, 0, 0, 0, @HookReadDelimiters, nil);
+  CountDelimitedPartsW('a,b', ',');
+  XenoHookRemove(H1);
+  Check(HookTrace = 'delims ok', 'hooks: before hook reads the arguments', WideString(HookTrace));
+
+  // A before hook may change a value argument.
+  Plain := Galaxy.TurnToDateTime(500);
+  H1 := XenoHookAdd('TGalaxy.TurnToDateTime', 0, 0, 0, @HookShiftTurn, nil);
+  Shifted := Galaxy.TurnToDateTime(500);
+  XenoHookRemove(H1);
+  Check(Abs(Shifted - Plain - 10) < 0.001, 'hooks: before hook changes a method argument', FloatToStr(Shifted - Plain));
+  Turn := 500;
+  Args[0] := @Turn;
+  Shifted := 0;
+  Check(XenoHookInvoke(XenoHookInfo('TGalaxy.TurnToDateTime'), Galaxy, @Args[0], @Shifted) and (Shifted = Plain),
+      'hooks: invoke a method on an object');
+
+  // Replacement: the original does not run; the first replacer is reported.
+  XenoHookTestOwner('TestA');
+  H1 := XenoHookAdd(CountName, 0, 0, 0, @HookReplace, Pointer(42));
+  XenoHookTestOwner('TestB');
+  H2 := XenoHookAdd(CountName, 0, 0, 0, @HookReplace, Pointer(7));
+  XenoHookTestOwner('');
+  H3 := XenoHookAdd(CountName, 1, 0, 0, @HookSawOriginal, nil);
+  HookTrace := '';
+  Value := CountDelimitedPartsW('a,b,c', ',');
+  Check((Value = 42) or (Value = 7), 'hooks: replacement result', IntToStr(Value));
+  Check(HookTrace = 'ran=0 by=TestA', 'hooks: original skipped, first replacer reported', WideString(HookTrace));
+  XenoHookRemove(H1);
+  XenoHookRemove(H2);
+  XenoHookRemove(H3);
+
+  // Order: before by priority, then load order; after in reverse.
+  XenoHookTestOwner('TestA');
+  H1 := XenoHookAdd(CountName, 0, 0, 0, @HookTraceBefore, Pointer(Ord('A')));
+  H2 := XenoHookAdd(CountName, 1, 0, 0, @HookTraceAfter, Pointer(Ord('A')));
+  XenoHookTestOwner('TestB');
+  H3 := XenoHookAdd(CountName, 0, 0, 0, @HookTraceBefore, Pointer(Ord('B')));
+  H4 := XenoHookAdd(CountName, 0, 0, -10, @HookTraceBefore, Pointer(Ord('P')));
+  XenoHookTestOwner('');
+  HookTrace := '';
+  CountDelimitedPartsW('a', ',');
+  Check(HookTrace = 'P>A>B>A<', 'hooks: handler order', WideString(HookTrace));
+  XenoHookRemove(H1);
+  XenoHookRemove(H2);
+  XenoHookRemove(H3);
+  XenoHookRemove(H4);
+
+  // Overrides: TShip.GetName is abstract; the hook lands in every override.
+  HookCalls := 0;
+  H1 := XenoHookAdd('TShip.GetName', 1, 1, 0, @HookCountCall, nil);
+  Check(H1 <> 0, 'hooks: hook an abstract method with its overrides');
+  Name := GetPlayer.GetName;
+  Check(HookCalls = 1, 'hooks: the player override ran the hook once', IntToStr(HookCalls));
+  XenoHookRemove(H1);
+  H1 := XenoHookAdd('TRanger.GetName', 1, 0, 0, @HookRename, nil);
+  Check(GetPlayer.GetName = 'Hooked ' + Name, 'hooks: after hook changes a string result', GetPlayer.GetName);
+  XenoHookRemove(H1);
+  Check(GetPlayer.GetName = Name, 'hooks: string result restored');
+
+  // Cost of a wrapped routine without and with a hook.
+  Loops := 1000000;
+  StartedAt := GetTickCount64;
+  for I := 1 to Loops do
+    Galaxy.TurnToDateTime(I);
+  Line('hooks: unhooked call ' + IntToStr((GetTickCount64 - StartedAt) * 1000000 div QWord(Loops)) + ' ns');
+  H1 := XenoHookAdd('TGalaxy.TurnToDateTime', 1, 0, 0, @HookCountCall, nil);
+  StartedAt := GetTickCount64;
+  for I := 1 to Loops do
+    Galaxy.TurnToDateTime(I);
+  Line('hooks: hooked call ' + IntToStr((GetTickCount64 - StartedAt) * 1000000 div QWord(Loops)) + ' ns');
+  XenoHookRemove(H1);
+end;
+
+// --xeno-hook-profile: counts every call of every wrapped routine during
+// galaxy generation and turns, to find hot routines for hooks_exclude.txt.
+// Needs a build with XENO_HOOKS_PROFILE=1: every wrapper counts its calls.
+procedure StartHookProfile;
+var
+  I: Integer;
+begin
+  for I := 0 to XenoHookCount - 1 do
+    if XenoHookAt(I)^.Counter <> nil then
+      XenoHookAt(I)^.Counter^ := 0;
+end;
+
+procedure StopHookProfile;
+type
+  PInfo = ^TInfoHead;
+  TInfoHead = record
+    Size: Cardinal;
+    Id: Integer;
+    Name: PAnsiChar;
+  end;
+var
+  I: Integer;
+  Lines: TStringList;
+begin
+  Lines := TStringList.Create;
+  try
+    for I := 0 to XenoHookCount - 1 do
+      if (XenoHookAt(I)^.Counter <> nil) and (XenoHookAt(I)^.Counter^ > 0) then
+        Lines.Add(Format('%.12d %s', [Int64(XenoHookAt(I)^.Counter^), AnsiString(PInfo(XenoHookInfoAt(I))^.Name)]));
+    Lines.Sort;
+    Lines.SaveToFile(UTF8Encode(GetGameUserDirectory + 'xeno_hook_profile.txt'));
+  finally
+    Lines.Free;
+  end;
+end;
+
+// --xeno-seed=N: the same galaxy in every run, for comparing builds.
+procedure FixSeed(User, Payload: Pointer); cdecl;
+var
+  Created: TGalaxy;
+begin
+  Created := TGalaxy(TXenoFpcGalaxyCreatedEvent(Payload^).Galaxy);
+  Created.GenerationSeed := FixedSeed;
+  Created.RandomState := FixedSeed;
+  RandSeed := FixedSeed;
 end;
 
 { Integration }
@@ -659,6 +878,11 @@ begin
   Passes := 0;
   Skips := 0;
   Line('XenoModsFPC self-test; active mods: ' + SelectedMods);
+  if FixedSeed <> 0 then
+  begin
+    XenoSubscribe('Galaxy.Created', @FixSeed, nil);
+    Line('seed: ' + IntToStr(FixedSeed));
+  end;
   try
     Stage := 'inflation math';
     TestInflationMath;
@@ -670,12 +894,22 @@ begin
     TestCamouflageLogic;
     Stage := 'host';
     TestHost;
+    if ProfileHooks then
+      StartHookProfile;
     Stage := 'new game';
     GenerateGame;
     Stage := 'galaxy';
     TestGalaxy;
+    Stage := 'method hooks';
+    TestHooks;
     Stage := 'turns';
     RunTurns(TurnCount);
+    if XenoModActive('XenoFpcExample') then
+      Check(ScriptValue('XenoFpcExample', 'int,XenoFpcExample_Days', []) >= TurnCount,
+          'hooks: the example plugin hook on TGalaxy.NextDay ran every day',
+          IntToStr(ScriptValue('XenoFpcExample', 'int,XenoFpcExample_Days', [])));
+    if ProfileHooks then
+      StopHookProfile;
     Stage := 'script libraries';
     TestScriptLibraries;
     Stage := 'inflation save/load';
@@ -723,7 +957,11 @@ begin
       Requested := True;
       if Copy(ParamStr(I), 16, 1) = '=' then
         TurnCount := StrToIntDef(Copy(ParamStr(I), 17, MaxInt), TurnCount);
-    end;
+    end
+    else if ParamStr(I) = '--xeno-hook-profile' then
+      ProfileHooks := True
+    else if Copy(ParamStr(I), 1, 12) = '--xeno-seed=' then
+      FixedSeed := StrToIntDef(Copy(ParamStr(I), 13, MaxInt), 0);
 end;
 
 initialization
