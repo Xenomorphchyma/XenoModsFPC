@@ -12,7 +12,7 @@ Plugin DLLs, XenoNativeLoader and mods without an FPC port are left out;
 Native\*.ini stay because the built-in ports read them.
 .EXAMPLE
 python tools/build.py --release --target=win32
-powershell -File xenomods/package.ps1 -Version 1.0.0 -XenoModsZip D:\SRHD_Modding\GitHub\XenoMods\dist\XenoMods-1.1.0.zip
+powershell -File xenomods/package.ps1 -Version 1.0.0 -XenoModsZip XenoMods-1.1.0.zip
 #>
 param(
     [Parameter(Mandatory)] [string]$Version,
@@ -99,8 +99,6 @@ https://github.com/Xenomorphchyma/XenoModsFPC
 Удаление: удалите папки XenoModsFPC и Mods\XenoMods.
 
 Важно
-- Моды других авторов с DLL для XenoNativeLoader (Solar, SolEngine и т. п.)
-  на этой версии не работают: она загружает только плагины XenoModsFPC.
 - Сохранения и настройки лежат в Документы\SpaceRangersHD, как у обычной
   игры. Перед первым запуском сделайте копию сохранений. Отдельная папка:
   XenoModsFPC\Rangers.exe --user-dir="D:\Путь\к\папке".
