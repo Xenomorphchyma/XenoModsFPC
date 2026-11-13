@@ -391,6 +391,7 @@ var
   ItemId: Cardinal;
   CostBefore, Factor: Integer;
   SavePath: WideString;
+  Loaded: Boolean;
 begin
   if not XenoModActive('XenoEquipmentInflation') then
   begin
@@ -416,7 +417,12 @@ begin
   CostBefore := Item.Cost;
   SavePath := GetGameUserDirectory + 'Save\xeno_selftest.sav';
   Check(SaveGameToFile(SavePath, 'XenoSelfTest'), 'save: written');
-  Check(LoadGameFromFile(SavePath), 'load: read back');
+  // The port writes saves on a worker thread: wait until the file is complete.
+  Check((SaveWriter = nil) or SaveWriter.WaitForIdle(60000), 'save: writer finished');
+  Loaded := LoadGameFromFile(SavePath);
+  Check(Loaded, 'load: read back');
+  if not Loaded then
+    Exit; // the galaxy is not usable after a failed load
   Item := TItem(Galaxy.IdToItem(ItemId, False));
   if Item = nil then
     Check(False, 'inflation: item survives save/load', 'item ' + IntToStr(ItemId) + ' missing')

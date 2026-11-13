@@ -90,6 +90,9 @@ var
   GameUiMode: TGameUiMode = gumAutomatic;
   // Unattended runs (XenoModsFPC --xeno-selftest): create the window hidden.
   GameWindowStartHidden: Boolean = False;
+  // Unattended runs: log message boxes instead of waiting for a click; they
+  // answer with their last button (Cancel/No/OK).
+  GameDialogsSuppressed: Boolean = False;
   OnGameActivated, OnGameDeactivated: TNotifyEvent;
   GameSDLWindow: PSDL_Window;
   GameSDLRenderer: PSDL_Renderer;
@@ -1582,6 +1585,11 @@ begin
     Buttons[1].Text := 'No';
   end;
   Data.Buttons := @Buttons;
+  if GameDialogsSuppressed then
+  begin
+    LogGameMessage(gllError, 'ui', 'Message box suppressed (' + Title + '): ' + Text);
+    Exit(Buttons[Data.ButtonCount - 1].ID);
+  end;
   CheckGameSDL(SDL_ShowMessageBox(Data, Result), 'SDL_ShowMessageBox');
   if Result < 0 then
     Result := Buttons[Data.ButtonCount - 1].ID;
@@ -1589,6 +1597,11 @@ end;
 
 procedure ShowGameDialog(const Text: UnicodeString);
 begin
+  if GameDialogsSuppressed then
+  begin
+    LogGameMessage(gllError, 'ui', 'Dialog suppressed: ' + Text);
+    Exit;
+  end;
   CheckGameSDL(SDL_ShowSimpleMessageBox($10, 'Space Rangers', PAnsiChar(UTF8Encode(Text)), GameSDLWindow), 'SDL_ShowSimpleMessageBox');
 end;
 

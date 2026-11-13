@@ -218,6 +218,8 @@ begin
   if not SelfTest or Visible then
     Exit;
   GameWindowStartHidden := True;
+  // Errors go to rangers-fpc.log and the exit code instead of a dialog.
+  GameDialogsSuppressed := True;
   // The message loop idles until the window is activated, which a hidden
   // window never is.
   RuntimeActive := True;
