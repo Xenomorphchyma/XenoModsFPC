@@ -112,7 +112,7 @@ HD на основе графики из КР2:ДП, улучшенной ней
 Первые 20 секторов сохраняют ванильное распределение. Встроены кнопки метки из
 `AMod_MapMarker` автора Huk, адаптированный интерфейс.
 
-![Карта увеличенной галактики XenoBigGalaxy](https://raw.githubusercontent.com/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoBigGalaxy/preview.png)
+![Карта увеличенной галактики XenoBigGalaxy](https://media.githubusercontent.com/media/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoBigGalaxy/preview.png)
 
 Благодарность Lorki и EnaYzeR, авторам `AModGalaxyLite`, за идею увеличенной
 галактики.
@@ -145,7 +145,7 @@ HD на основе графики из КР2:ДП, улучшенной ней
 страницы. Если на площадке больше восьми чужих кораблей, список листается
 стабильными страницами по восемь; корабль игрока остаётся в центре.
 
-![Постраничный ангар XenoHangarPaging](https://raw.githubusercontent.com/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoHangarPaging/preview.png)
+![Постраничный ангар XenoHangarPaging](https://media.githubusercontent.com/media/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoHangarPaging/preview.png)
 
 ### XenoRangers
 
@@ -169,7 +169,7 @@ HD на основе графики из КР2:ДП, улучшенной ней
 Маршруты реагируют на захват систем, охрана защищает транспорты, а состав и темп
 операций меняются вместе с положением Коалиции.
 
-![Ресурсный конвой XenoCoalitionSupplyLines](https://raw.githubusercontent.com/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoCoalitionSupplyLines/preview.png)
+![Ресурсный конвой XenoCoalitionSupplyLines](https://media.githubusercontent.com/media/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoCoalitionSupplyLines/preview.png)
 
 Обязательная внешняя зависимость: включённый `UtilityFunctionsPack` (его
 нативная часть уже встроена в FPC-порт).
@@ -180,7 +180,7 @@ HD на основе графики из КР2:ДП, улучшенной ней
 базе камуфляж нужной серии, прокладывают безопасный маршрут и собирают ценные
 обломки в системах доминаторов.
 
-![Рейнджер-специалист XenoDomRangers](https://raw.githubusercontent.com/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoDomRangers/preview.png)
+![Рейнджер-специалист XenoDomRangers](https://media.githubusercontent.com/media/Xenomorphchyma/XenoMods/main/docs/images/mods/XenoDomRangers/preview.png)
 
 ### XenoZeroSignalQuest
 
