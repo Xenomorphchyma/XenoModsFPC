@@ -76,6 +76,9 @@ procedure LoadPendingAssets(PendingLoads: TList);
 implementation
 
 uses
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   GameDiagnostics,
   GameEvents,
   fPanelMain,
@@ -305,7 +308,11 @@ begin
   ContentPanel.RightButtonDownCallback := IntroMouseDown;
   if SkipIntro then
     IntroFinished := True;
-  if IntroFinished and (MusicManager.CategoryOverride = '') then
+  if IntroFinished and (MusicManager.CategoryOverride = '')
+{$IFDEF XENO_MODS}
+      and not XenoRaiseMusicPlaceFade
+{$ENDIF}
+  then
     MusicManager.RequestFadeOut;
   LoadProgress := 0;
   DisplayedProgress := 0;

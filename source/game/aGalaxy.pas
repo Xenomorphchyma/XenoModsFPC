@@ -801,6 +801,9 @@ uses
 {$IFDEF NATIVE_AUTOSEARCH}
   AutoSearch,
 {$ENDIF}
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
 {$IFDEF MSWINDOWS}
   Windows,
 {$ENDIF}
@@ -954,7 +957,12 @@ begin
   MaxRangerWealth := 3000;
   AverageRangerStrength := 1;
   BestRangerStrength := 1;
+{$IFDEF XENO_MODS}
+  // Galaxy.Created: e.g. XenoBigGalaxy sets 55 sectors from its Lang.dat.
+  ConstellationCount := XenoRaiseGalaxyCreated(Self, 20);
+{$ELSE}
   ConstellationCount := 20;
+{$ENDIF}
   Constellations := TObjectList.Create;
   Stars := TObjectList.Create;
   Holes := TObjectList.Create;
@@ -2810,6 +2818,10 @@ begin
       end;
       Inc(CurrentTurn);
       Stage := 8;
+{$IFDEF XENO_MODS}
+      // Galaxy.StationSpawning: e.g. XenoBigGalaxy keeps the 73-star rate.
+      if XenoRaiseStationSpawning(Self, CurrentTurn) then
+{$ENDIF}
       ProcessStationSpawning;
       Stage := 9;
       UpdateConstellationMilitaryStats;
@@ -7060,7 +7072,12 @@ begin
     if AxisLinks * 7 > TotalLinks then
       InvalidLayout := True;
     Inc(GenerationAttempts);
+{$IFDEF XENO_MODS}
+  // Galaxy.LayoutDone: e.g. XenoBigGalaxy only rejects crossing borders.
+  until XenoRaiseGalaxyLayoutDone(Self, GenerationAttempts) or not InvalidLayout;
+{$ELSE}
   until (GenerationAttempts > 1000) or not InvalidLayout;
+{$ENDIF}
   GenerationAttempts := 0;
   repeat
     for I := 0 to Constellations.Count - 1 do
@@ -7077,6 +7094,33 @@ begin
     for I := 0 to aGalaxy.Galaxy.Stars.Count - 1 do
     begin
       Star := aGalaxy.Galaxy.Stars[I];
+{$IFDEF XENO_MODS}
+      // Galaxy.PlanStar: a planned sector replaces the stock index rule; the
+      // stock area balancing below still applies (as with the Delphi hook).
+      ConstellationIndex := XenoRaiseGalaxyPlanStar(Self, I);
+      if ConstellationIndex >= 0 then
+      begin
+        if (I > aGalaxy.Galaxy.Stars.Count / 1.46) and (System.Random < 0.6) then
+        begin
+          BestAreaPerStar := 0;
+          for K := 0 to Constellations.Count - 2 do
+            if (I < 65) or (K >= 8) then
+            begin
+              Constellation := Constellations[K];
+              if Constellation.Stars.Count = 0 then
+                AreaPerStar := Constellation.GetOutlineArea * 2
+              else
+                AreaPerStar := Constellation.GetOutlineArea / Constellation.Stars.Count;
+              if AreaPerStar > BestAreaPerStar then
+              begin
+                ConstellationIndex := K;
+                BestAreaPerStar := AreaPerStar;
+              end;
+            end;
+        end;
+      end
+      else
+{$ENDIF}
       if (I = 70) or (I = 71) then
         ConstellationIndex := Constellations.Count - 1
       else
@@ -7539,6 +7583,16 @@ begin
       end;
       if Flag <> 0 then
         Break;
+{$IFDEF XENO_MODS}
+      // Galaxy.ContourNoEar: with many stars every ear may hold one and this
+      // loop would never end; e.g. XenoBigGalaxy drops the last vertex.
+      if (WorkX.Count > 2) and XenoRaiseContourNoEar then
+      begin
+        WorkX.Delete(MiddleIndex);
+        WorkY.Delete(MiddleIndex);
+        Break;
+      end;
+{$ENDIF}
     end;
     while WorkX.Count > 2 do
       for EarIndex := 0 to WorkX.Count - 1 do

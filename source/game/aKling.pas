@@ -183,6 +183,9 @@ uses
   EC_Str,
   Math,
   EC_Struct,
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   aPlayer;
 
 const
@@ -2137,6 +2140,11 @@ end;
 function TKling.IsPlayerCamouflageEffective(Ship: TShip): Boolean;
 begin
   Result := False;
+{$IFDEF XENO_MODS}
+  // Kling.Camouflage: e.g. XenoDomRangers specialists registered by its script.
+  if (Ship <> nil) and (Ship <> GetPlayer) and XenoRaiseCamouflage(Self, Ship, Result) then
+    Exit;
+{$ENDIF}
   if (GetPlayer <> nil)
       and (GetPlayer = Ship)
       and not HasIndependentScriptFaction

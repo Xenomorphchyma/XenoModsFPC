@@ -62,6 +62,9 @@ function ChooseMusicFile(const Category: WideString; const CurrentFile: WideStri
 implementation
 
 uses
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   GlobalsV,
   Types,
   SysUtils,
@@ -393,6 +396,11 @@ var
   Attempts: Integer;
   Chosen: WideString;
 begin
+{$IFDEF XENO_MODS}
+  // Music.PlayCategory: e.g. XenoMusicFlow defers or crossfades place music.
+  if MusicEnabled and not XenoRaiseMusicPlayCategory(Category) then
+    Exit;
+{$ENDIF}
   if MusicEnabled then
   begin
     ControlLock.Enter;
@@ -429,6 +437,9 @@ end;
 
 procedure TMusicControl.StopImmediately;
 begin
+{$IFDEF XENO_MODS}
+  XenoRaiseMusicStopImmediately;
+{$ENDIF}
   if MusicEnabled and Current.IsRunning then
   begin
     Current.RequestStop;

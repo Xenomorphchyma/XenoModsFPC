@@ -695,6 +695,9 @@ uses
   aAsteroid,
   aMissile,
   Globals,
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   fShip2;
 
 constructor TItem.Create;
@@ -706,10 +709,16 @@ begin
     Inc(Galaxy.NextItemId);
   end;
   NameOverride := '';
+{$IFDEF XENO_MODS}
+  XenoRaiseItem(xeItemCreated, Self);
+{$ENDIF}
 end;
 
 destructor TItem.Destroy;
 begin
+{$IFDEF XENO_MODS}
+  XenoRaiseItem(xeItemDestroyed, Self);
+{$ENDIF}
   if (Galaxy <> nil) and not Galaxy.Destroying and (GetPlayer <> nil) and (ScriptItem <> nil) then
     TScriptItem(ScriptItem).RunActionCode(satOnItemDestroy, nil, nil, nil, 0);
   Id := 0;
@@ -731,7 +740,12 @@ begin
   Buffer.AddSingle(Position.Y);
   Buffer.AddIntegerValue(Weight);
   Buffer.AddAnsiChar(AnsiChar(OwnerId));
+{$IFDEF XENO_MODS}
+  // Item.SaveCost: e.g. XenoEquipmentInflation saves the clean base price.
+  Buffer.AddDWord(Cardinal(XenoRaiseItemSaveCost(Self, Cost)));
+{$ELSE}
   Buffer.AddDWord(Cost);
+{$ENDIF}
   Buffer.AddIntegerValue(DestroyFlag);
   if NameOverride = '' then
     Buffer.AddBoolean(False)
@@ -758,6 +772,9 @@ begin
   if Buffer.GetBoolean then
     NameOverride := Buffer.ReadWideString;
   NoDropFlag := Buffer.GetByte;
+{$IFDEF XENO_MODS}
+  XenoRaiseItem(xeItemLoaded, Self);
+{$ENDIF}
 end;
 
 procedure TItem.SaveToBlock(Block: TBlockParEC);
@@ -796,6 +813,9 @@ begin
     (Self as TCountableItem).StackCount := Weight div (Self as TCountableItem).GetUnitSize;
   if (ItemType = t_ArtefactTranclucator) and ((Self as TArtefactTranclucator).Ship <> nil) then
     TTranclucator((Self as TArtefactTranclucator).Ship).ArtefactSize := Weight;
+{$IFDEF XENO_MODS}
+  XenoRaiseItem(xeItemLoaded, Self);
+{$ENDIF}
 end;
 
 procedure TItem.ResolveLoadedReferences(Galaxy: TGalaxy);

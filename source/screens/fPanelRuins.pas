@@ -33,6 +33,9 @@ type
 implementation
 
 uses
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   GameDiagnostics,
   aRanger,
   fEquipmentShop,
@@ -205,7 +208,11 @@ begin
   CaptureGalaxyPreview(Screen);
   SaveManagerReturnScreenId := FormToId(Screen);
   SaveGameToFile(SaveManagerScreen.GetAutoSavePath, 'as');
-  if MusicManager.CategoryOverride = '' then
+  if (MusicManager.CategoryOverride = '')
+{$IFDEF XENO_MODS}
+      and not XenoRaiseMusicPlaceFade
+{$ENDIF}
+  then
     MusicManager.RequestFadeOut;
   PlayerAutomaticControl := False;
   PruneExpiredPersistentPlayerMessages;

@@ -113,6 +113,9 @@ function EnumerateSoundDevice(Guid: Pointer; Description: PAnsiChar; Module: PAn
 implementation
 
 uses
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   GlobalsV,
   Types,
   SysUtils,
@@ -719,6 +722,9 @@ end;
 
 procedure TSoundBuffer.StartVolumeRamp(Interval: Cardinal; Step: Single);
 begin
+{$IFDEF XENO_MODS}
+  Step := XenoRaiseVolumeRamp(Self, Interval, Step);
+{$ENDIF}
   ResetGameEvent(VolumeEvent);
   VolumeStep := Step;
   if VolumeTimer <> nil then

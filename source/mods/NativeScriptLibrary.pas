@@ -9,7 +9,13 @@ interface
 uses
   EC_Expression;
 
+type
+  // Callback with caller data, used by the XenoModsFPC plugin host.
+  TNativeScriptUserCallback = procedure(User: Pointer; av: array of TVarEC; Code: TCodeEC);
+
 procedure RegisterNativeScriptFunction(const LibraryName, Signature: WideString; Callback: TExpressionCallback);
+procedure RegisterNativeScriptUserFunction(const LibraryName, Signature: WideString; Callback: TNativeScriptUserCallback;
+    User: Pointer);
 function LoadNativeScriptLibrary(const Path: WideString): Cardinal;
 function FreeNativeScriptLibrary(Handle: Cardinal): Boolean;
 function NativeScriptLibraryName(Handle: Cardinal): WideString;
@@ -28,6 +34,8 @@ type
     LibraryHandle: Cardinal;
     Name, Signature: WideString;
     Callback: TExpressionCallback;
+    UserCallback: TNativeScriptUserCallback;
+    User: Pointer;
   end;
 var
   Libraries: array of WideString;
@@ -75,7 +83,8 @@ begin
   Result := Libraries[Handle - 1];
 end;
 
-procedure RegisterNativeScriptFunction(const LibraryName, Signature: WideString; Callback: TExpressionCallback);
+procedure RegisterNativeScriptFunctionInternal(const LibraryName, Signature: WideString; Callback: TExpressionCallback;
+    UserCallback: TNativeScriptUserCallback; User: Pointer);
 var
   Handle: Cardinal;
   N, I: Integer;
@@ -97,6 +106,8 @@ begin
     begin
       NativeExports[I].Signature := Signature;
       NativeExports[I].Callback := Callback;
+      NativeExports[I].UserCallback := UserCallback;
+      NativeExports[I].User := User;
       Exit;
     end;
   N := Length(NativeExports);
@@ -107,6 +118,19 @@ begin
   NativeExports[N].Name := ExportName;
   NativeExports[N].Signature := Signature;
   NativeExports[N].Callback := Callback;
+  NativeExports[N].UserCallback := UserCallback;
+  NativeExports[N].User := User;
+end;
+
+procedure RegisterNativeScriptFunction(const LibraryName, Signature: WideString; Callback: TExpressionCallback);
+begin
+  RegisterNativeScriptFunctionInternal(LibraryName, Signature, Callback, nil, nil);
+end;
+
+procedure RegisterNativeScriptUserFunction(const LibraryName, Signature: WideString; Callback: TNativeScriptUserCallback;
+    User: Pointer);
+begin
+  RegisterNativeScriptFunctionInternal(LibraryName, Signature, nil, Callback, User);
 end;
 
 function InitNativeScriptFunction(Cell: TVarEC; Handle: Cardinal; const ExportName, Signature: WideString): Boolean;
@@ -216,7 +240,10 @@ begin
         end;
       end;
     end;
-    NativeExports[Slot - 1].Callback(Args, Code);
+    if Assigned(NativeExports[Slot - 1].UserCallback) then
+      NativeExports[Slot - 1].UserCallback(NativeExports[Slot - 1].User, Args, Code)
+    else
+      NativeExports[Slot - 1].Callback(Args, Code);
     av[0].ResetKind(vkEmpty);
     case ReturnKind of
       lvInt: av[0].SetInt(Args[0].GetInt);

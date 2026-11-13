@@ -1317,6 +1317,10 @@ uses
 {$IFDEF NATIVE_AUTOSEARCH}
   AutoSearch,
 {$ENDIF}
+{$IFDEF XENO_MODS}
+  // The built-in Xeno mods register their events and script libraries.
+  XenoBuiltinMods,
+{$ENDIF}
   BreakMessageGIException,
   aCalc,
   ab_Hit,

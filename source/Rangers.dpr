@@ -8,6 +8,7 @@ program Rangers;
 {$IMAGEBASE $00400000}
 {$SETPEFLAGS $20}
 {$I-}
+{$I mods/NativeMods.inc}
 {$IF not Defined(WASI) and not Defined(ANDROID) and not Defined(SRHD_IOS) and not Defined(SWITCH)}
   {$R Rangers.res}
 {$ENDIF}
@@ -38,6 +39,9 @@ uses
   DateUtils,
   GameWindow,
   GameSystem,
+{$IFDEF XENO_MODS}
+  XenoModsHost,
+{$ENDIF}
   GameDiagnostics,
   GameBuildInfo,
   GlobalsV,
@@ -501,9 +505,18 @@ begin
     if LowerCase(ParamStr(ArgumentIndex)) = 'savemergedcfg' then
       DumpLoadedConfig := True;
   // The executable can live in an app bundle; resources are selected explicitly.
+{$IFDEF XENO_MODS}
+  XenoSelectGameDirectory;
+{$ENDIF}
   for ArgumentIndex := 1 to ParamCount do
     if Copy(ParamStr(ArgumentIndex), 1, 11) = '--game-dir=' then
       SetGameDirectory(UTF8Decode(Copy(ParamStr(ArgumentIndex), 12, MaxInt)));
+{$IFDEF XENO_MODS}
+  // Separate saves/settings (portable installs, tests): --user-dir=PATH.
+  for ArgumentIndex := 1 to ParamCount do
+    if Copy(ParamStr(ArgumentIndex), 1, 11) = '--user-dir=' then
+      GR_Main.OverrideGameUserDirectory := UTF8Decode(Copy(ParamStr(ArgumentIndex), 12, MaxInt));
+{$ENDIF}
   Randomize;
   Attempt := 0;
   repeat

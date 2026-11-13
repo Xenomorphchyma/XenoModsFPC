@@ -2087,6 +2087,9 @@ procedure LogPresentationParameters;
 implementation
 
 uses
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   GameDiagnostics,
   GameGraphics,
   GameAudio,
@@ -3666,6 +3669,10 @@ begin
   ModInstallConfigs := TList.Create;
   ModLanguageInstallConfigs := TList.Create;
   LoadSelectedModInstallBlocks;
+{$IFDEF XENO_MODS}
+  // XenoModsFPC plugins of the selected mods (Mods/<mod>/Native/*.XenoPlugin.dll).
+  XenoSyncPlugins;
+{$ENDIF}
   if not LoadConfiguredPackages then
     raise Exception.Create('Error while openning package files');
 end;
@@ -5087,6 +5094,9 @@ begin
   try
     if SoundManager <> nil then
       SoundManager.UpdateFades;
+{$IFDEF XENO_MODS}
+    XenoRaiseFrame;
+{$ENDIF}
     Stage := 1;
     ContinueLoop := 1;
     while True do

@@ -130,6 +130,9 @@ uses
   aMyFunction,
   EC_Struct,
   ThreadCalc,
+{$IFDEF XENO_MODS}
+  XenoPluginHost,
+{$ENDIF}
   aCalc;
 
 constructor TfHangar.Create;
@@ -241,6 +244,9 @@ var
   Path: WideString;
 begin
   HoveredShip := nil;
+{$IFDEF XENO_MODS}
+  XenoRaiseHangar(xeHangarOpened, Self);
+{$ENDIF}
   LoadPanel.OnOpen;
   if AmbientAnimationTimer <> nil then
   begin
@@ -402,6 +408,9 @@ var
   I: Integer;
 begin
   Galaxy.CheckIntegrityChecksum(211);
+{$IFDEF XENO_MODS}
+  XenoRaiseHangar(xeHangarClosed, Self);
+{$ENDIF}
   if GetPlayer <> nil then
     GetPlayer.ScriptItemsAct(satOnLeavingForm, nil, nil, 0);
   ShipInfoWindow.SetActive(False);
@@ -678,6 +687,10 @@ begin
   end
   else
   begin
+{$IFDEF XENO_MODS}
+    if XenoRaiseHangarKey(Self, Key) then
+      Exit;
+{$ENDIF}
     MainPanel.ProcessKeyDown(Key);
     if GetPlayer.IsDockedToShip then
       StationPanel.ProcessKeyDown(Key)
@@ -875,7 +888,11 @@ begin
   (GetByName('ButRefuel') as TGraphButtonGI).SetDisabled(True);
   (GetByName('ButTakeOff') as TGraphButtonGI).SetDisabled(True);
   TakeOffPending := True;
-  if MusicManager.CategoryOverride = WideString('') then
+  if (MusicManager.CategoryOverride = WideString(''))
+{$IFDEF XENO_MODS}
+      and not XenoRaiseMusicPlaceFade
+{$ENDIF}
+  then
     MusicManager.RequestFadeOut;
   EvictRuinsAndGovernmentCaches;
   ReleaseAllTextureSurfaces;
@@ -1177,6 +1194,32 @@ begin
         ShipSlots[I].Opacity := 255;
       end;
     end;
+{$IFDEF XENO_MODS}
+  // Hangar.Refresh: e.g. XenoHangarPaging owns slots 1..8 while more than
+  // eight ships are docked; only the player's slot 0 is filled here then.
+  if XenoRaiseHangarRefresh(Self) then
+  begin
+    // Keep the stock slot shuffle's random draws so RNG use matches vanilla.
+    for I := 0 to 10 do
+    begin
+      RandomIntRange(1, 8);
+      RandomIntRange(1, 8);
+    end;
+    if ShipSlots[0].AnimationState = 0 then
+    begin
+      Path := GetPlayer.GetShipPortraitImagePath;
+      if Path <> WideString('') then
+      begin
+        ShipSlots[0].ShipId := GetPlayer.Id;
+        ShipSlots[0].AnimationState := 1;
+        ShipSlots[0].Opacity := 0;
+        LoadDockedShipImage(0, Path, False, GetShipPortraitScale(GetPlayer));
+        SetDockedShipOpacity(0, 0);
+      end;
+    end;
+    Exit;
+  end;
+{$ENDIF}
   for I := 1 to High(ShipSlots) do
     if (ShipSlots[I].AnimationState = 0) and (ShipSlots[I].ShipId <> 0) then
     begin

@@ -11,3 +11,7 @@ __pycache__/
 # Keep tracked documentation; ignore untracked Markdown notes.
 *.[mM][dD]
 !/DEVELOPING.md
+# XenoModsFPC: keep its documentation, skip local plugin builds.
+!/.github/README.md
+!/xenomods/**/*.md
+/xenomods/sdk/example/build/
