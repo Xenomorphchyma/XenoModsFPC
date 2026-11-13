@@ -43,6 +43,10 @@ procedure XenoLogWarning(const ModName, Text: WideString);
 // that holds CFG\Main.dat: the working directory, the executable's folder or
 // its parent.
 procedure XenoSelectGameDirectory;
+// --xeno-selftest runs unattended: a hidden window that does not take the
+// focus and a silent audio device (the music still plays through the mixer,
+// so its tests keep working). Call before the window and audio are opened.
+procedure XenoPrepareSelfTestRun;
 {$ENDIF}
 
 implementation
@@ -53,6 +57,8 @@ uses
   SysUtils,
   GameDiagnostics,
   GameSystem,
+  GameWindow,
+  SDL2,
   EC_Str,
   GR_Main;
 
@@ -195,6 +201,27 @@ begin
     SetGameDirectory(ExeDir)
   else if IsGameDir(ExtractFileDir(ExeDir)) then
     SetGameDirectory(ExtractFileDir(ExeDir));
+end;
+
+procedure XenoPrepareSelfTestRun;
+var
+  I: Integer;
+  SelfTest, Visible: Boolean;
+begin
+  SelfTest := False;
+  Visible := False;
+  for I := 1 to ParamCount do
+    if Copy(ParamStr(I), 1, 15) = '--xeno-selftest' then
+      SelfTest := True
+    else if ParamStr(I) = '--xeno-visible' then
+      Visible := True; // watch the run: normal window and sound
+  if not SelfTest or Visible then
+    Exit;
+  GameWindowStartHidden := True;
+  // The message loop idles until the window is activated, which a hidden
+  // window never is.
+  RuntimeActive := True;
+  SDL_SetHint('SDL_AUDIODRIVER', 'dummy');
 end;
 
 { TXenoIni }

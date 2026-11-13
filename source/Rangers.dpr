@@ -507,6 +507,7 @@ begin
   // The executable can live in an app bundle; resources are selected explicitly.
 {$IFDEF XENO_MODS}
   XenoSelectGameDirectory;
+  XenoPrepareSelfTestRun;
 {$ENDIF}
   for ArgumentIndex := 1 to ParamCount do
     if Copy(ParamStr(ArgumentIndex), 1, 11) = '--game-dir=' then

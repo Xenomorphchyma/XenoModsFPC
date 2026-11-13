@@ -603,7 +603,10 @@ var
 begin
   Deadline := GetTickCount64 + QWord(TimeoutMs);
   repeat
-    if (MusicManager.Current <> nil) and MusicManager.Current.IsRunning and (MusicManager.Current.GetFileName <> '') then
+    // Wait until the previous track has finished fading out as well: during
+    // that transition MusicFlow deliberately switches at once.
+    if (MusicManager.Current <> nil) and MusicManager.Current.IsRunning and (MusicManager.Current.GetFileName <> '')
+        and ((MusicManager.Queued = nil) or not MusicManager.Queued.IsRunning) then
       Exit(True);
     Sleep(50);
   until GetTickCount64 > Deadline;
@@ -627,13 +630,13 @@ begin
   MusicManager.StopImmediately;
   Sleep(300);
   MusicManager.PlayCategory('StarMap');
-  if not WaitMusicRunning(5000) then
+  if not WaitMusicRunning(15000) then
   begin
     Skip('musicflow runtime', 'no space track started');
     Exit;
   end;
   Before := MusicManager.Current.GetFileName;
-  Check(not XenoRaiseMusicPlayCategory('Nation.Human'), 'musicflow: landing defers the planet music', Before);
+  Check(not XenoRaiseMusicPlayCategory('Nation.PiratePlanetMain'),'musicflow: landing defers the planet music', Before);
   Check(MusicManager.Current.GetFileName = Before, 'musicflow: the space track keeps playing');
   Check(not XenoRaiseMusicPlayCategory('StarMap'), 'musicflow: returning to space cancels the pending switch');
   Check(XenoRaiseMusicPlaceFade, 'musicflow: takeoff/loading fade keeps a place track');

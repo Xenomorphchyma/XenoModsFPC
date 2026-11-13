@@ -88,6 +88,8 @@ procedure SetGameArcadeControls(Flags: Integer);
 var
   // Read by settings; apply changes through ConfigureGameUi at a tree rebuild.
   GameUiMode: TGameUiMode = gumAutomatic;
+  // Unattended runs (XenoModsFPC --xeno-selftest): create the window hidden.
+  GameWindowStartHidden: Boolean = False;
   OnGameActivated, OnGameDeactivated: TNotifyEvent;
   GameSDLWindow: PSDL_Window;
   GameSDLRenderer: PSDL_Renderer;
@@ -673,6 +675,8 @@ begin
         Flags := SDL_WINDOW_ALLOW_HIGHDPI;
         if BrowserWindow or FullscreenOnlyWindow then
           Flags := Flags or SDL_WINDOW_RESIZABLE;
+        if GameWindowStartHidden then
+          Flags := Flags or SDL_WINDOW_HIDDEN;
         LogGameVideo(Format('SDL_CreateWindow(size=%dx%d points, flags=$%s)', [WindowSize.X, WindowSize.Y, IntToHex(Flags, 8)]));
         GameSDLWindow := SDL_CreateWindow('Rangers', SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WindowSize.X, WindowSize.Y, Flags);
         if GameSDLWindow = nil then
